@@ -40,7 +40,8 @@ export function PaymentSummary({paymentSummary}) {
         </div>
       </div>
 
-      <button className="place-order-button button-primary">
+      <button className="place-order-button button-primary"
+       onClick={() => {}}>
         Place your order
       </button>
     </div>
