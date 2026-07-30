@@ -1,8 +1,12 @@
 package com.ecommerce.api_gateway.routes;
 
+import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.function.*;
+
+import java.net.URI;
 
 import static org.springframework.cloud.gateway.server.mvc.filter.BeforeFilterFunctions.setPath;
 import static org.springframework.cloud.gateway.server.mvc.filter.BeforeFilterFunctions.uri;
@@ -17,6 +21,10 @@ public class Routes {
         return route("product_service")
                 .route(path("/api/product"), http())
                 .before(uri("http://localhost:8080"))
+                .filter(CircuitBreakerFilterFunctions.circuitBreaker(
+                        "productServiceCircuitBreaker",
+                        URI.create("forward:/fallbackRoute")
+                ))
                 .build();
     }
 
@@ -25,6 +33,10 @@ public class Routes {
         return route("product_service_swagger")
                 .route(path("/aggregate/product-service/v3/api-docs"), http())
                 .before(uri("http://localhost:8080"))
+                .filter(CircuitBreakerFilterFunctions.circuitBreaker(
+                        "productServiceSwaggerCircuitBreaker",
+                        URI.create("forward:/fallbackRoute")
+                ))
                 .before(setPath("/v3/api-docs"))
                 .build();
     }
@@ -34,6 +46,10 @@ public class Routes {
         return route("order_service")
                 .route(path("/api/order"), http())
                 .before(uri("http://localhost:8081"))
+                .filter(CircuitBreakerFilterFunctions.circuitBreaker(
+                        "orderServiceCircuitBreaker",
+                        URI.create("forward:/fallbackRoute")
+                ))
                 .build();
     }
 
@@ -54,6 +70,10 @@ public class Routes {
         return route("inventory_service")
                 .route(path("/api/inventory"), http())
                 .before(uri("http://localhost:8082"))
+                .filter(CircuitBreakerFilterFunctions.circuitBreaker(
+                        "inventoryServiceCircuitBreaker",
+                        URI.create("forward:/fallbackRoute")
+                ))
                 .build();
     }
 
@@ -66,6 +86,26 @@ public class Routes {
                 )
                 .before(uri("http://localhost:8082"))
                 .before(setPath("/v3/api-docs"))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> fallbackRoute() {
+        //Replacement for:
+        //@RestController
+        //public class FallbackController {
+        //
+        //    @GetMapping("/fallbackRoute")
+        //    public ResponseEntity<String> fallback() {
+        //        return ResponseEntity
+        //                .status(HttpStatus.SERVICE_UNAVAILABLE)
+        //                .body("Service Unavailable");
+        //    }
+        //}
+        return route("fallbackRoute")
+                .GET("/fallbackRoute", request ->
+                        ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body("Service Unavailable"))
                 .build();
     }
 }
