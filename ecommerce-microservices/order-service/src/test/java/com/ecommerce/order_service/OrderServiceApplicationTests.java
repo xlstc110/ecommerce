@@ -1,5 +1,6 @@
 package com.ecommerce.order_service;
 
+import com.ecommerce.order_service.stubs.InventoryClientStub;
 import io.restassured.RestAssured;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,10 +9,18 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.mysql.MySQLContainer;
+import org.wiremock.spring.ConfigureWireMock;
+import org.wiremock.spring.EnableWireMock;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@EnableWireMock(
+		@ConfigureWireMock(
+				name = "inventory",
+				baseUrlProperties = "inventory.url"
+		)
+)
 class OrderServiceApplicationTests {
 
 	@ServiceConnection
@@ -40,6 +49,8 @@ class OrderServiceApplicationTests {
                     "quantity": 1
                 }
                 """;
+
+		InventoryClientStub.stubInventoryCall("iphone_15", 1);
 
 		var responseBodyString = RestAssured.given()
 				.contentType("application/json")
