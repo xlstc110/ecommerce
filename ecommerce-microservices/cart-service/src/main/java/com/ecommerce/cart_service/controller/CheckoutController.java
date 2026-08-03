@@ -8,6 +8,8 @@ import com.ecommerce.cart_service.service.CartService;
 import com.ecommerce.cart_service.service.DeliveryOptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,19 +28,19 @@ public class CheckoutController {
     }
 
     @GetMapping("/api/payment-summary")
-    public PaymentSummaryResponse getPaymentSummary() {
-        return cartService.getPaymentSummary();
+    public PaymentSummaryResponse getPaymentSummary(@AuthenticationPrincipal Jwt jwt) {
+        return cartService.getPaymentSummary(jwt.getSubject());
     }
 
     @GetMapping("/internal/cart-snapshot")
-    public CheckoutSnapshot getCheckoutSnapshot() {
-        return cartService.getCheckoutSnapshot();
+    public CheckoutSnapshot getCheckoutSnapshot(@AuthenticationPrincipal Jwt jwt) {
+        return cartService.getCheckoutSnapshot(jwt.getSubject());
     }
 
     @DeleteMapping("/internal/cart-items")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void clearCart() {
-        cartService.clearCart();
+    public void clearCart(@AuthenticationPrincipal Jwt jwt) {
+        cartService.clearCart(jwt.getSubject());
     }
 
     @PostMapping("/internal/reset")

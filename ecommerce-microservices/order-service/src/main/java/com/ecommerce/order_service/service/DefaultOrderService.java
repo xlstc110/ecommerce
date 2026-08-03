@@ -12,6 +12,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class DefaultOrderService {
+    static final String DEMO_USER_ID = "demo-user";
+
     private final OrderRepository orderRepository;
 
     @Transactional
@@ -20,6 +22,7 @@ public class DefaultOrderService {
         orderRepository.saveAll(List.of(
                 Order.builder()
                         .id("27cba69d-4c3d-4098-b42d-ac7fa62b7664")
+                        .userId(DEMO_USER_ID)
                         .orderTimeMs(1723456800000L)
                         .totalCostCents(3506)
                         .products(List.of(
@@ -28,6 +31,7 @@ public class DefaultOrderService {
                         .build(),
                 Order.builder()
                         .id("b6b6c212-d30e-4d4a-805d-90b52ce6b37d")
+                        .userId(DEMO_USER_ID)
                         .orderTimeMs(1718013600000L)
                         .totalCostCents(4190)
                         .products(List.of(

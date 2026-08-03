@@ -1,8 +1,9 @@
 package com.ecommerce.cart_service.config;
 
+import com.ecommerce.cart_service.model.Cart;
 import com.ecommerce.cart_service.model.CartItem;
 import com.ecommerce.cart_service.model.DeliveryOption;
-import com.ecommerce.cart_service.repository.CartItemRepository;
+import com.ecommerce.cart_service.repository.CartRepository;
 import com.ecommerce.cart_service.repository.DeliveryOptionRepository;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,9 @@ import java.util.Arrays;
 @Component
 @RequiredArgsConstructor
 public class DefaultDataInitializer implements CommandLineRunner {
-    private final CartItemRepository cartItemRepository;
+    static final String DEMO_USER_ID = "demo-user";
+
+    private final CartRepository cartRepository;
     private final DeliveryOptionRepository deliveryOptionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -30,7 +33,7 @@ public class DefaultDataInitializer implements CommandLineRunner {
 
     private void loadDefaults(boolean replaceExisting) throws Exception {
         if (replaceExisting) {
-            cartItemRepository.deleteAll();
+            cartRepository.deleteAll();
             deliveryOptionRepository.deleteAll();
         }
 
@@ -40,14 +43,18 @@ public class DefaultDataInitializer implements CommandLineRunner {
                     .filter(option -> !deliveryOptionRepository.existsById(option.getId()))
                     .toList());
         }
-        if (replaceExisting || cartItemRepository.count() == 0) {
+        if (replaceExisting || !cartRepository.existsById(DEMO_USER_ID)) {
             try (var input = new ClassPathResource("data/cart.json").getInputStream()) {
                 CartItem[] items = objectMapper.readValue(input, CartItem[].class);
                 long timestamp = System.currentTimeMillis();
                 for (int index = 0; index < items.length; index++) {
                     items[index].setCreatedAt(timestamp + index);
                 }
-                cartItemRepository.saveAll(Arrays.asList(items));
+                cartRepository.save(Cart.builder()
+                        .userId(DEMO_USER_ID)
+                        .items(Arrays.asList(items))
+                        .updatedAt(timestamp)
+                        .build());
             }
         }
     }

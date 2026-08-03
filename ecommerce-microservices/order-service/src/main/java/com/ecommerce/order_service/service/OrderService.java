@@ -29,21 +29,21 @@ public class OrderService {
     private final ProductClient productClient;
     private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 
-    public List<OrderResponse> getOrders(boolean expandProducts) {
-        return orderRepository.findAllByOrderByOrderTimeMsDesc().stream()
+    public List<OrderResponse> getOrders(String userId, boolean expandProducts) {
+        return orderRepository.findAllByUserIdOrderByOrderTimeMsDesc(userId).stream()
                 .map(order -> toResponse(order, expandProducts))
                 .toList();
     }
 
-    public OrderResponse getOrder(String orderId, boolean expandProducts) {
-        Order order = orderRepository.findById(orderId)
+    public OrderResponse getOrder(String userId, String orderId, boolean expandProducts) {
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         return toResponse(order, expandProducts);
     }
 
     @Transactional
-    public OrderResponse placeOrder() {
-        CheckoutSnapshot snapshot = cartClient.getCheckoutSnapshot();
+    public OrderResponse placeOrder(String userId, String authorization) {
+        CheckoutSnapshot snapshot = cartClient.getCheckoutSnapshot(authorization);
         if (snapshot.items() == null || snapshot.items().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty");
         }
@@ -60,6 +60,7 @@ public class OrderService {
 
         Order order = Order.builder()
                 .id(UUID.randomUUID().toString())
+                .userId(userId)
                 .orderTimeMs(System.currentTimeMillis())
                 .totalCostCents(snapshot.totalCostCents())
                 .products(snapshot.items().stream()
@@ -72,10 +73,10 @@ public class OrderService {
                 .build();
 
         Order savedOrder = orderRepository.save(order);
-        cartClient.clearCart();
+        cartClient.clearCart(authorization);
         kafkaTemplate.send(
                 "order-placed",
-                new OrderPlacedEvent(savedOrder.getId(), "anonymous")
+                new OrderPlacedEvent(savedOrder.getId(), userId)
         );
         return toResponse(savedOrder, false);
     }

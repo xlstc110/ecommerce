@@ -2,14 +2,17 @@ package com.ecommerce.cart_service.service;
 
 import com.ecommerce.cart_service.client.ProductClient;
 import com.ecommerce.cart_service.dto.*;
+import com.ecommerce.cart_service.model.Cart;
 import com.ecommerce.cart_service.model.CartItem;
 import com.ecommerce.cart_service.model.DeliveryOption;
-import com.ecommerce.cart_service.repository.CartItemRepository;
+import com.ecommerce.cart_service.repository.CartRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import static org.springframework.http.HttpStatus.*;
@@ -17,17 +20,17 @@ import static org.springframework.http.HttpStatus.*;
 @Service
 @RequiredArgsConstructor
 public class CartService {
-    private final CartItemRepository cartItemRepository;
+    private final CartRepository cartRepository;
     private final ProductClient productClient;
     private final DeliveryOptionService deliveryOptionService;
 
-    public List<CartItemResponse> getCartItems(boolean expandProduct) {
-        return cartItemRepository.findAllByOrderByCreatedAtAsc().stream()
+    public List<CartItemResponse> getCartItems(String userId, boolean expandProduct) {
+        return getItems(userId).stream()
                 .map(item -> toResponse(item, expandProduct))
                 .toList();
     }
 
-    public CartItemResponse addItem(AddCartItemRequest request) {
+    public CartItemResponse addItem(String userId, AddCartItemRequest request) {
         if (request.productId() == null || request.productId().isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, "Product id is required");
         }
@@ -36,23 +39,38 @@ public class CartService {
         }
         requireProduct(request.productId());
 
-        CartItem item = cartItemRepository.findById(request.productId())
-                .map(existing -> {
-                    existing.setQuantity(existing.getQuantity() + request.quantity());
-                    return existing;
-                })
-                .orElseGet(() -> CartItem.builder()
-                        .productId(request.productId())
-                        .quantity(request.quantity())
-                        .deliveryOptionId("1")
-                        .createdAt(System.currentTimeMillis())
-                        .build());
+        Cart cart = getOrCreateCart(userId);
+        CartItem item = cart.getItems().stream()
+                .filter(existing -> existing.getProductId().equals(request.productId()))
+                .findFirst()
+                .orElse(null);
 
-        return toResponse(cartItemRepository.save(item), false);
+        if (item == null) {
+            item = CartItem.builder()
+                    .productId(request.productId())
+                    .quantity(request.quantity())
+                    .deliveryOptionId("1")
+                    .createdAt(System.currentTimeMillis())
+                    .build();
+            cart.getItems().add(item);
+        } else {
+            int newQuantity = item.getQuantity() + request.quantity();
+            if (newQuantity > 10) {
+                throw new ResponseStatusException(BAD_REQUEST, "Total quantity must not exceed 10");
+            }
+            item.setQuantity(newQuantity);
+        }
+
+        touchAndSave(cart);
+        return toResponse(item, false);
     }
 
-    public CartItemResponse updateItem(String productId, UpdateCartItemRequest request) {
-        CartItem item = cartItemRepository.findById(productId)
+    public CartItemResponse updateItem(String userId, String productId, UpdateCartItemRequest request) {
+        Cart cart = cartRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Cart item not found"));
+        CartItem item = cart.getItems().stream()
+                .filter(existing -> existing.getProductId().equals(productId))
+                .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Cart item not found"));
 
         if (request.quantity() != null) {
@@ -65,18 +83,22 @@ public class CartService {
             deliveryOptionService.require(request.deliveryOptionId());
             item.setDeliveryOptionId(request.deliveryOptionId());
         }
-        return toResponse(cartItemRepository.save(item), false);
+        touchAndSave(cart);
+        return toResponse(item, false);
     }
 
-    public void deleteItem(String productId) {
-        if (!cartItemRepository.existsById(productId)) {
+    public void deleteItem(String userId, String productId) {
+        Cart cart = cartRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Cart item not found"));
+        boolean removed = cart.getItems().removeIf(item -> item.getProductId().equals(productId));
+        if (!removed) {
             throw new ResponseStatusException(NOT_FOUND, "Cart item not found");
         }
-        cartItemRepository.deleteById(productId);
+        touchAndSave(cart);
     }
 
-    public PaymentSummaryResponse getPaymentSummary() {
-        Totals totals = calculateTotals();
+    public PaymentSummaryResponse getPaymentSummary(String userId) {
+        Totals totals = calculateTotals(userId);
         return new PaymentSummaryResponse(
                 totals.totalItems,
                 totals.productCostCents,
@@ -87,8 +109,8 @@ public class CartService {
         );
     }
 
-    public CheckoutSnapshot getCheckoutSnapshot() {
-        List<CheckoutSnapshot.Item> items = cartItemRepository.findAllByOrderByCreatedAtAsc().stream()
+    public CheckoutSnapshot getCheckoutSnapshot(String userId) {
+        List<CheckoutSnapshot.Item> items = getItems(userId).stream()
                 .map(item -> {
                     requireProduct(item.getProductId());
                     DeliveryOption option = deliveryOptionService.require(item.getDeliveryOptionId());
@@ -99,18 +121,18 @@ public class CartService {
                     );
                 })
                 .toList();
-        return new CheckoutSnapshot(calculateTotals().totalCostCents, items);
+        return new CheckoutSnapshot(calculateTotals(userId).totalCostCents, items);
     }
 
-    public void clearCart() {
-        cartItemRepository.deleteAll();
+    public void clearCart(String userId) {
+        cartRepository.deleteById(userId);
     }
 
-    private Totals calculateTotals() {
+    private Totals calculateTotals(String userId) {
         int totalItems = 0;
         int productCost = 0;
         int shippingCost = 0;
-        for (CartItem item : cartItemRepository.findAllByOrderByCreatedAtAsc()) {
+        for (CartItem item : getItems(userId)) {
             ProductResponse product = requireProduct(item.getProductId());
             DeliveryOption option = deliveryOptionService.require(item.getDeliveryOptionId());
             totalItems += item.getQuantity();
@@ -120,6 +142,28 @@ public class CartService {
         int beforeTax = productCost + shippingCost;
         int tax = (int) Math.round(beforeTax * 0.1);
         return new Totals(totalItems, productCost, shippingCost, beforeTax, tax, beforeTax + tax);
+    }
+
+    private Cart getOrCreateCart(String userId) {
+        return cartRepository.findById(userId)
+                .orElseGet(() -> Cart.builder().userId(userId).build());
+    }
+
+    private List<CartItem> getItems(String userId) {
+        return cartRepository.findById(userId)
+                .map(Cart::getItems)
+                .orElseGet(List::of)
+                .stream()
+                .sorted(Comparator.comparing(CartItem::getCreatedAt))
+                .toList();
+    }
+
+    private void touchAndSave(Cart cart) {
+        if (cart.getItems() == null) {
+            cart.setItems(new ArrayList<>());
+        }
+        cart.setUpdatedAt(System.currentTimeMillis());
+        cartRepository.save(cart);
     }
 
     private ProductResponse requireProduct(String productId) {

@@ -16,10 +16,13 @@ import java.util.List;
 public class Order {
     @Id
     private String id;
+    @Column(nullable = false)
+    private String userId;
     private Long orderTimeMs;
     private Integer totalCostCents;
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "order_items", joinColumns = @JoinColumn(name = "order_id"))
     @OrderColumn(name = "line_number")
+    @Builder.Default
     private List<OrderItem> products = new ArrayList<>();
 }
