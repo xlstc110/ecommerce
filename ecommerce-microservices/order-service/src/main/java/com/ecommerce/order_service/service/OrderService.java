@@ -1,47 +1,86 @@
 package com.ecommerce.order_service.service;
 
+import com.ecommerce.order_service.client.CartClient;
 import com.ecommerce.order_service.client.InventoryClient;
-import com.ecommerce.order_service.dto.OrderRequest;
+import com.ecommerce.order_service.client.ProductClient;
+import com.ecommerce.order_service.dto.CheckoutSnapshot;
 import com.ecommerce.order_service.dto.OrderResponse;
 import com.ecommerce.order_service.event.OrderPlacedEvent;
 import com.ecommerce.order_service.mapper.OrderMapper;
 import com.ecommerce.order_service.model.Order;
+import com.ecommerce.order_service.model.OrderItem;
 import com.ecommerce.order_service.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class OrderService {
-
     private final OrderRepository orderRepository;
     private final InventoryClient inventoryClient;
+    private final CartClient cartClient;
+    private final ProductClient productClient;
     private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 
-    public void placeOrder(OrderRequest orderRequest) {
-        boolean isInStock = inventoryClient.isInStock(orderRequest.skuCode(), orderRequest.quantity());
+    public List<OrderResponse> getOrders(boolean expandProducts) {
+        return orderRepository.findAllByOrderByOrderTimeMsDesc().stream()
+                .map(order -> toResponse(order, expandProducts))
+                .toList();
+    }
 
-        if(isInStock){
-            Order order = OrderMapper.orderRequestToOrder(orderRequest);
-            orderRepository.save(order);
+    public OrderResponse getOrder(String orderId, boolean expandProducts) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        return toResponse(order, expandProducts);
+    }
 
-            // Send the message to Kafka topic
-            // OrderNumber, email,
-            OrderPlacedEvent orderPlacedEvent = new OrderPlacedEvent(order.getOrderNumber(), orderRequest.userDetails().email());
-            log.info("Start - Sending OrderPlacedEvent {} to Kafka topic 'order-placed'", orderPlacedEvent);
-            kafkaTemplate.send("order-placed", orderPlacedEvent);
-            log.info("End - Sending OrderPlacedEvent {}", orderPlacedEvent);
-        } else {
-            throw new RuntimeException("Product with SkuCode "
-                    + orderRequest.skuCode()
-                    + " is insufficient");
+    @Transactional
+    public OrderResponse placeOrder() {
+        CheckoutSnapshot snapshot = cartClient.getCheckoutSnapshot();
+        if (snapshot.items() == null || snapshot.items().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty");
         }
 
+        for (CheckoutSnapshot.Item item : snapshot.items()) {
+            boolean inStock = inventoryClient.isInStock(item.productId(), item.quantity());
+            if (!inStock) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Product is out of stock: " + item.productId()
+                );
+            }
+        }
 
+        Order order = Order.builder()
+                .id(UUID.randomUUID().toString())
+                .orderTimeMs(System.currentTimeMillis())
+                .totalCostCents(snapshot.totalCostCents())
+                .products(snapshot.items().stream()
+                        .map(item -> OrderItem.builder()
+                                .productId(item.productId())
+                                .quantity(item.quantity())
+                                .estimatedDeliveryTimeMs(item.estimatedDeliveryTimeMs())
+                                .build())
+                        .toList())
+                .build();
 
-        //return OrderMapper.orderToOrderResponse(savedOrder);
+        Order savedOrder = orderRepository.save(order);
+        cartClient.clearCart();
+        kafkaTemplate.send(
+                "order-placed",
+                new OrderPlacedEvent(savedOrder.getId(), "anonymous")
+        );
+        return toResponse(savedOrder, false);
+    }
+
+    private OrderResponse toResponse(Order order, boolean expandProducts) {
+        return OrderMapper.toResponse(order, expandProducts, productClient::getProduct);
     }
 }

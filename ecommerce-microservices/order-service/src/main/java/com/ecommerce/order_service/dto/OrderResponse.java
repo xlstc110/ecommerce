@@ -1,14 +1,20 @@
 package com.ecommerce.order_service.dto;
 
-import lombok.Builder;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
-import java.math.BigDecimal;
+import java.util.List;
 
-@Builder
-public record OrderResponse (
-        Long id,
-        String orderNumber,
-        String skuCode,
-        BigDecimal price,
-        Integer quantity
-) {}
+public record OrderResponse(
+        String id,
+        Long orderTimeMs,
+        Integer totalCostCents,
+        List<Item> products
+) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Item(
+            String productId,
+            Integer quantity,
+            Long estimatedDeliveryTimeMs,
+            ProductResponse product
+    ) {}
+}

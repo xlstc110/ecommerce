@@ -1,28 +1,38 @@
 package com.ecommerce.order_service.mapper;
 
-import com.ecommerce.order_service.dto.OrderRequest;
 import com.ecommerce.order_service.dto.OrderResponse;
+import com.ecommerce.order_service.dto.ProductResponse;
 import com.ecommerce.order_service.model.Order;
+import com.ecommerce.order_service.model.OrderItem;
 
-import java.util.UUID;
+import java.util.function.Function;
 
-public class OrderMapper {
-    public static Order orderRequestToOrder(OrderRequest orderRequest) {
-        return Order.builder()
-                .orderNumber(UUID.randomUUID().toString())
-                .price(orderRequest.price())
-                .skuCode(orderRequest.skuCode())
-                .quantity(orderRequest.quantity())
-                .build();
+public final class OrderMapper {
+    private OrderMapper() {}
+
+    public static OrderResponse toResponse(
+            Order order,
+            boolean expandProducts,
+            Function<String, ProductResponse> productLoader) {
+        return new OrderResponse(
+                order.getId(),
+                order.getOrderTimeMs(),
+                order.getTotalCostCents(),
+                order.getProducts().stream()
+                        .map(item -> toItem(item, expandProducts, productLoader))
+                        .toList()
+        );
     }
 
-    public static OrderResponse orderToOrderResponse(Order order) {
-        return OrderResponse.builder()
-                .id(order.getId())
-                .orderNumber(order.getOrderNumber())
-                .price(order.getPrice())
-                .skuCode(order.getSkuCode())
-                .quantity(order.getQuantity())
-                .build();
+    private static OrderResponse.Item toItem(
+            OrderItem item,
+            boolean expandProducts,
+            Function<String, ProductResponse> productLoader) {
+        return new OrderResponse.Item(
+                item.getProductId(),
+                item.getQuantity(),
+                item.getEstimatedDeliveryTimeMs(),
+                expandProducts ? productLoader.apply(item.getProductId()) : null
+        );
     }
 }

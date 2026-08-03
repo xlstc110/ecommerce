@@ -7,6 +7,9 @@ import com.ecommerce.product_service.model.Product;
 import com.ecommerce.product_service.repository.ProductRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
 
@@ -25,11 +28,25 @@ public class ProductService {
         return ProductMapper.productToProductResponse(savedProduct);
     }
 
-    public List<ProductResponse> getProducts() {
+    public List<ProductResponse> getProducts(String search) {
         List<Product> products = productRepository.findAll();
+        if (search != null && !search.isBlank()) {
+            String normalizedSearch = search.toLowerCase();
+            products = products.stream()
+                    .filter(product -> product.getName().toLowerCase().contains(normalizedSearch)
+                            || product.getKeywords().stream()
+                            .anyMatch(keyword -> keyword.toLowerCase().contains(normalizedSearch)))
+                    .toList();
+        }
         return products
                 .stream()
                 .map(ProductMapper::productToProductResponse)
                 .toList();
+    }
+
+    public ProductResponse getProduct(String productId) {
+        return productRepository.findById(productId)
+                .map(ProductMapper::productToProductResponse)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Product not found"));
     }
 }

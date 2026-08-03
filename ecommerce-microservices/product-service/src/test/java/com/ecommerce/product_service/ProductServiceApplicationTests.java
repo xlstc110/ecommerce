@@ -35,9 +35,11 @@ class ProductServiceApplicationTests {
 	void shouldCreateProduct() {
 		String requestBody = """
 				{
-				    "name": "Iphone 15",
-				    "description": "Brand new Iphone 15",
-				    "price": 1200
+				    "image": "images/products/test.jpg",
+				    "name": "Test Product",
+				    "rating": {"stars": 4.5, "count": 10},
+				    "priceCents": 1200,
+				    "keywords": ["test"]
 				}
 				""";
 
@@ -45,12 +47,22 @@ class ProductServiceApplicationTests {
 				.contentType(ContentType.JSON)
 				.body(requestBody)
 				.when()
-				.post("/api/product")
+				.post("/api/products")
 				.then()
 				.statusCode(201)
 				.body("id", Matchers.notNullValue())
-				.body("name", Matchers.equalTo("Iphone 15"))
-				.body("description", Matchers.equalTo("Brand new Iphone 15"))
-				.body("price", Matchers.equalTo(1200));
+				.body("name", Matchers.equalTo("Test Product"))
+				.body("priceCents", Matchers.equalTo(1200));
+	}
+
+	@Test
+	void shouldSearchSeededProductsByKeyword() {
+		RestAssured.given()
+				.queryParam("search", "basketball")
+				.when()
+				.get("/api/products")
+				.then()
+				.statusCode(200)
+				.body("name", Matchers.hasItem("Intermediate Size Basketball"));
 	}
 }

@@ -19,7 +19,12 @@ public class Routes {
     @Bean
     public RouterFunction<ServerResponse> productServiceRoute() {
         return route("product_service")
-                .route(path("/api/product"), http())
+                .route(
+                        path("/api/product")
+                                .or(path("/api/products"))
+                                .or(path("/api/products/**")),
+                        http()
+                )
                 .before(uri("http://localhost:8080"))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "productServiceCircuitBreaker",
@@ -44,7 +49,12 @@ public class Routes {
     @Bean
     public RouterFunction<ServerResponse> orderServiceRoute() {
         return route("order_service")
-                .route(path("/api/order"), http())
+                .route(
+                        path("/api/order")
+                                .or(path("/api/orders"))
+                                .or(path("/api/orders/**")),
+                        http()
+                )
                 .before(uri("http://localhost:8081"))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker(
                         "orderServiceCircuitBreaker",
@@ -74,6 +84,33 @@ public class Routes {
                         "inventoryServiceCircuitBreaker",
                         URI.create("forward:/fallbackRoute")
                 ))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> cartServiceRoute() {
+        return route("cart_service")
+                .route(
+                        path("/api/cart-items")
+                                .or(path("/api/cart-items/**"))
+                                .or(path("/api/delivery-options"))
+                                .or(path("/api/payment-summary")),
+                        http()
+                )
+                .before(uri("http://localhost:8083"))
+                .filter(CircuitBreakerFilterFunctions.circuitBreaker(
+                        "cartServiceCircuitBreaker",
+                        URI.create("forward:/fallbackRoute")
+                ))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> cartServiceSwaggerRoute() {
+        return route("cart_service_swagger")
+                .route(path("/aggregate/cart-service/v3/api-docs"), http())
+                .before(uri("http://localhost:8083"))
+                .before(setPath("/v3/api-docs"))
                 .build();
     }
 

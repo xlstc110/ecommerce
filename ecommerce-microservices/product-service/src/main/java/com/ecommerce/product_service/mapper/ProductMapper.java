@@ -7,18 +7,23 @@ import com.ecommerce.product_service.model.Product;
 public class ProductMapper {
     public static Product productRequestToProduct(ProductRequest productRequest) {
         return Product.builder()
+                .id(productRequest.id())
+                .image(productRequest.image())
                 .name(productRequest.name())
-                .description(productRequest.description())
-                .price(productRequest.price())
+                .rating(productRequest.rating())
+                .priceCents(productRequest.priceCents())
+                .keywords(productRequest.keywords())
                 .build();
     }
 
     public static ProductResponse productToProductResponse(Product product) {
         return new ProductResponse(
                 product.getId(),
+                product.getImage(),
                 product.getName(),
-                product.getDescription(),
-                product.getPrice()
+                product.getRating(),
+                product.getPriceCents(),
+                product.getKeywords()
         );
     }
 }
