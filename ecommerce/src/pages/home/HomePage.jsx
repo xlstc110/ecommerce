@@ -4,7 +4,7 @@ import { Header } from "../../components/Header";
 import { ProductGrid } from "./ProductGrid";
 import axios from "axios";
 
-export function HomePage({ cart, loadCart }) {
+export function HomePage({ cart, loadCart, username, onLogout }) {
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
@@ -19,7 +19,7 @@ export function HomePage({ cart, loadCart }) {
     <>
       <title>Ecommerce</title>
 
-      <Header cart={cart} />
+      <Header cart={cart} username={username} onLogout={onLogout} />
 
       <div className="home-page">
         <ProductGrid products={products} loadCart={loadCart}/>

@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import './header.css';
 
-export function Header({cart}) {
+export function Header({cart, username, onLogout}) {
     let totalQuantity = 0;
     cart.forEach( cartItem =>
         totalQuantity += cartItem.quantity
@@ -27,6 +27,14 @@ export function Header({cart}) {
                 </div>
 
                 <div className="right-section">
+                    {username && (
+                        <div className="account-section">
+                            <span className="account-name">Hello, {username}</span>
+                            <button className="logout-button" type="button" onClick={onLogout}>
+                                Sign out
+                            </button>
+                        </div>
+                    )}
                     <Link className="orders-link header-link" to="/orders">
 
                         <span className="orders-text">Orders</span>

@@ -5,7 +5,7 @@ import { useEffect, useState, Fragment } from "react";
 import { formatMoney } from "../../utils/money";
 import dayjs from "dayjs";
 
-export function OrdersPage({ cart }) {
+export function OrdersPage({ cart, username, onLogout }) {
   const [orders, setOrders] = useState([]);
   useEffect(() => {
     const getOrdersData = async () => {
@@ -19,7 +19,7 @@ export function OrdersPage({ cart }) {
     <>
       <title>Orders</title>
 
-      <Header cart={cart} />
+      <Header cart={cart} username={username} onLogout={onLogout} />
 
       <div className="orders-page">
         <div className="page-title">Your Orders</div>

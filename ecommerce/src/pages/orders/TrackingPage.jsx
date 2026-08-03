@@ -1,12 +1,12 @@
 import './TrackingPage.css';
 import { Header } from '../../components/Header';
 
-export function TrackingPage({cart}) {
+export function TrackingPage({cart, username, onLogout}) {
     return (
         <>
             <title>Tracking</title>
             
-            <Header cart={cart}/>
+            <Header cart={cart} username={username} onLogout={onLogout}/>
 
             <div class="tracking-page">
                 <div class="order-tracking">
